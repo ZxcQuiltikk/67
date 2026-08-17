@@ -833,24 +833,34 @@ function UI:CreateWindow(WindowConfig: table?): table
 
         UI.Elements[SliderNumber] = SliderFrame
 
-        local function UpdateSlider(NewVal)
-            NewVal = Round(NewVal, SliderConfig.Increment)
-            Slider.Value = math.clamp(NewVal, Slider.Min, Slider.Max)
-            
-            local displayValue = Slider.Value
-            if Slider.Value % 1 == 0 then
-                displayValue = math.floor(Slider.Value)
-            else
-                displayValue = math.floor(Slider.Value * 100 + 0.5) / 100
-            end
+local function UpdateSlider(NewVal)
+	local increment = SliderConfig.Increment or 0.01
+	NewVal = Round(tonumber(NewVal) or Slider.Min, increment)
+	Slider.Value = math.clamp(NewVal, Slider.Min, Slider.Max)
 
-            local Percentage = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
-            PlayTween(Fill, 0.1, {Size = UDim2.new(Percentage, 0, 1, 0)})
-            Title.Text = SliderConfig.Name..": "..tostring(displayValue)
-            InputBox.Text = tostring(displayValue)
-            
-            SliderConfig.Callback(Slider.Value)
-        end
+	local precision = 0
+	local testIncrement = increment
+
+	while precision < 6 and math.abs(testIncrement - math.round(testIncrement)) > 1e-8 do
+		testIncrement *= 10
+		precision += 1
+	end
+
+	local displayValue = string.format("%." .. precision .. "f", Slider.Value)
+	displayValue = displayValue:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+
+	local range = Slider.Max - Slider.Min
+	local percentage = range ~= 0 and (Slider.Value - Slider.Min) / range or 0
+
+	PlayTween(Fill, 0.1, {
+		Size = UDim2.new(math.clamp(percentage, 0, 1), 0, 1, 0)
+	})
+
+	Title.Text = SliderConfig.Name .. ": " .. displayValue
+	InputBox.Text = displayValue
+
+	SliderConfig.Callback(Slider.Value)
+end
 
         UpdateSlider(Slider.Value)
 
