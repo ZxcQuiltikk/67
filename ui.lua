@@ -60,21 +60,17 @@ local function AnimateNeighbor(Index, Size)
 end
 
 local function Round(Number, Factor)
-	Number = tonumber(Number)
-	Factor = tonumber(Factor) or 1
-	if Factor == 0 then return Number end
+	Number = tonumber(Number) or 0
+	Factor = tonumber(Factor) or 0.01
 
-	local result = math.floor(Number / Factor + 0.5) * Factor
-
-	local str = tostring(Factor)
-	local dot = str:find(".", 1, true)
-	local precision = dot and (#str - dot) or 0
-
-	if precision > 0 then
-		result = tonumber(string.format("%." .. precision .. "f", result))
+	if Factor <= 0 then
+		return Number
 	end
 
-	return result
+	local precision = math.max(0, math.floor(-math.log10(Factor) + 0.5))
+	local result = math.floor(Number / Factor + 0.5) * Factor
+
+	return tonumber(string.format("%." .. precision .. "f", result))
 end
 
 function UI:Unload()
