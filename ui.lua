@@ -60,17 +60,23 @@ local function AnimateNeighbor(Index, Size)
 end
 
 local function Round(Number, Factor)
-	Number = tonumber(Number) or 0
-	Factor = tonumber(Factor) or 0.01
+    Number = tonumber(Number)
 
-	if Factor <= 0 then
-		return Number
-	end
+    local sign = Number >= 0 and 1 or -1
+    local result = math.floor(Number / Factor + 0.5 * sign) * Factor
 
-	local precision = math.max(0, math.floor(-math.log10(Factor) + 0.5))
-	local result = math.floor(Number / Factor + 0.5) * Factor
+    if result < 0 then
+        result = result + Factor
+    end
 
-	return tonumber(string.format("%." .. precision .. "f", result))
+    if Factor < 1 then
+        local str = tostring(Factor)
+        local dot = str:find("%.")
+        local precision = dot and #str - dot or 0
+        result = tonumber(string.format("%." .. precision .. "f", result))
+    end
+
+    return result
 end
 
 function UI:Unload()
@@ -833,34 +839,24 @@ function UI:CreateWindow(WindowConfig: table?): table
 
         UI.Elements[SliderNumber] = SliderFrame
 
-local function UpdateSlider(NewVal)
-	local increment = SliderConfig.Increment or 0.01
-	NewVal = Round(tonumber(NewVal) or Slider.Min, increment)
-	Slider.Value = math.clamp(NewVal, Slider.Min, Slider.Max)
+        local function UpdateSlider(NewVal)
+            NewVal = Round(NewVal, SliderConfig.Increment)
+            Slider.Value = math.clamp(NewVal, Slider.Min, Slider.Max)
+            
+            local displayValue = Slider.Value
+            if Slider.Value % 1 == 0 then
+                displayValue = math.floor(Slider.Value)
+            else
+                displayValue = math.floor(Slider.Value * 100 + 0.5) / 100
+            end
 
-	local precision = 0
-	local testIncrement = increment
-
-	while precision < 6 and math.abs(testIncrement - math.round(testIncrement)) > 1e-8 do
-		testIncrement *= 10
-		precision += 1
-	end
-
-	local displayValue = string.format("%." .. precision .. "f", Slider.Value)
-	displayValue = displayValue:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
-
-	local range = Slider.Max - Slider.Min
-	local percentage = range ~= 0 and (Slider.Value - Slider.Min) / range or 0
-
-	PlayTween(Fill, 0.1, {
-		Size = UDim2.new(math.clamp(percentage, 0, 1), 0, 1, 0)
-	})
-
-	Title.Text = SliderConfig.Name .. ": " .. displayValue
-	InputBox.Text = displayValue
-
-	SliderConfig.Callback(Slider.Value)
-end
+            local Percentage = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
+            PlayTween(Fill, 0.1, {Size = UDim2.new(Percentage, 0, 1, 0)})
+            Title.Text = SliderConfig.Name..": "..tostring(displayValue)
+            InputBox.Text = tostring(displayValue)
+            
+            SliderConfig.Callback(Slider.Value)
+        end
 
         UpdateSlider(Slider.Value)
 
@@ -1003,6 +999,149 @@ end
             Font = Enum.Font.GothamBlack,
             TextTruncate = Enum.TextTruncate.AtEnd
         })
+
+		function UI:Notify(NotificationConfig: table?)
+    NotificationConfig = NotificationConfig or {}
+    NotificationConfig.Title = NotificationConfig.Title or "Notification"
+    NotificationConfig.Text = NotificationConfig.Text or ""
+    NotificationConfig.Duration = NotificationConfig.Duration or 3
+    NotificationConfig.Type = NotificationConfig.Type or "Info"
+
+    local TypeColors = {
+        Info = Color3.fromRGB(60, 120, 200),
+        Success = Color3.fromRGB(60, 180, 75),
+        Warning = Color3.fromRGB(200, 170, 40),
+        Error = Color3.fromRGB(200, 55, 55)
+    }
+    local AccentColor = TypeColors[NotificationConfig.Type] or TypeColors.Info
+
+    local Holder = UI.ScreenGui:FindFirstChild("NotificationHolder")
+    if not Holder then
+        Holder = SetChildren(CreateElement("Frame", {
+            Parent = UI.ScreenGui,
+            Name = "NotificationHolder",
+            Size = UDim2.new(0, 320, 1, -20),
+            Position = UDim2.new(1, -340, 0, 10),
+            BackgroundTransparency = 1
+        }), {
+            CreateElement("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 8),
+                VerticalAlignment = Enum.VerticalAlignment.Top,
+                HorizontalAlignment = Enum.HorizontalAlignment.Right
+            })
+        })
+    end
+
+    local Count = #Holder:GetChildren() - 1
+    local StartY = Count * 68
+
+    local NotifFrame = SetChildren(CreateElement("Frame", {
+        Parent = Holder,
+        Name = "Notification",
+        Size = UDim2.new(0, 310, 0, 60),
+        Position = UDim2.new(1, 0, 0, StartY),
+        Transparency = 0,
+        BackgroundColor3 = Color3.fromRGB(22, 22, 22),
+        ClipsDescendants = true
+    }), {
+        CreateElement("UICorner", {CornerRadius = UDim.new(0, 16)}),
+        CreateElement("UIStroke", {
+            Color = AccentColor,
+            Thickness = 1.5,
+            Transparency = 0.3
+        }),
+        CreateElement("Frame", {
+            Name = "AccentBar",
+            Size = UDim2.new(0, 4, 1, -10),
+            Position = UDim2.new(0, 6, 0, 5),
+            BackgroundColor3 = AccentColor,
+            BorderSizePixel = 0
+        }, {
+            CreateElement("UICorner", {CornerRadius = UDim.new(1, 0)})
+        }),
+        CreateElement("TextLabel", {
+            Name = "Title",
+            Size = UDim2.new(1, -30, 0, 22),
+            Position = UDim2.new(0, 22, 0, 6),
+            BackgroundTransparency = 1,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Center,
+            Text = NotificationConfig.Title,
+            TextColor3 = Color3.fromRGB(240, 240, 240),
+            TextSize = 14,
+            Font = Enum.Font.GothamBlack,
+            TextTruncate = Enum.TextTruncate.AtEnd
+        }),
+        CreateElement("TextLabel", {
+            Name = "Text",
+            Size = UDim2.new(1, -30, 0, 20),
+            Position = UDim2.new(0, 22, 0, 28),
+            BackgroundTransparency = 1,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            Text = NotificationConfig.Text,
+            TextColor3 = Color3.fromRGB(180, 180, 180),
+            TextSize = 12,
+            Font = Enum.Font.Gotham,
+            TextWrapped = true,
+            TextTruncate = Enum.TextTruncate.AtEnd
+        }),
+        CreateElement("ImageButton", {
+            Name = "Close",
+            Size = UDim2.new(0, 16, 0, 16),
+            Position = UDim2.new(1, -22, 0, 6),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://7072706796",
+            ImageColor3 = Color3.fromRGB(120, 120, 120)
+        }),
+        CreateElement("Frame", {
+            Name = "Timer",
+            Size = UDim2.new(1, 0, 0, 2),
+            Position = UDim2.new(0, 0, 1, -2),
+            BackgroundColor3 = AccentColor,
+            BackgroundTransparency = 0.4,
+            BorderSizePixel = 0
+        })
+    })
+
+    NotifFrame.Close.MouseEnter:Connect(function()
+        PlayTween(NotifFrame.Close, 0.15, {ImageColor3 = Color3.fromRGB(240, 240, 240)})
+    end)
+    NotifFrame.Close.MouseLeave:Connect(function()
+        PlayTween(NotifFrame.Close, 0.15, {ImageColor3 = Color3.fromRGB(120, 120, 120)})
+    end)
+
+    NotifFrame.Size = UDim2.new(0, 0, 0, 0)
+    NotifFrame.Position = UDim2.new(1, 10, 0, StartY)
+
+    PlayTween(NotifFrame, {0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out}, {
+        Size = UDim2.new(0, 310, 0, 60),
+        Position = UDim2.new(0, 0, 0, StartY)
+    })
+
+    PlayTween(NotifFrame.Timer, NotificationConfig.Duration, {
+        Size = UDim2.new(0, 0, 0, 2)
+    }, Enum.EasingStyle.Linear)
+
+    local function RemoveNotif()
+        PlayTween(NotifFrame, {0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In}, {
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(1, 10, 0, NotifFrame.Position.Y.Offset)
+        }):Completed:Once(function()
+            NotifFrame:Destroy()
+        end)
+    end
+
+    AddConnection(NotifFrame.Close.InputEnded, function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        RemoveNotif()
+    end)
+
+    task.delay(NotificationConfig.Duration, RemoveNotif)
+
+    return NotifFrame
+end		
 
         local Arrow = CreateElement("ImageLabel", {
             Parent = Header,
